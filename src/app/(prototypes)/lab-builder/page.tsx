@@ -11,6 +11,7 @@ import { Tabs } from '@/components/navigation/Tabs';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon, Icons } from '@/components/Icon';
+import { FilterControls } from '@/components/dashboard/FilterControls';
 
 // Types
 interface Activity {
@@ -931,6 +932,71 @@ export default function LabBuilderPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState<'build' | 'capture' | 'preview'>('build');
+  const [filters, setFilters] = useState<Array<{ column: string; operator: string; value: unknown }>>([]);
+  const [labName, setLabName] = useState<string>('');
+
+  // Filter configuration
+  const filterColumns = useMemo(() => [
+    {
+      label: 'Skill',
+      value: 'skill',
+      type: 'select' as const,
+      options: Array.from(new Set(sampleActivities.map(a => a.skill))).map(skill => ({
+        label: skill,
+        value: skill
+      }))
+    },
+    {
+      label: 'Difficulty',
+      value: 'difficulty',
+      type: 'select' as const,
+      options: [
+        { label: 'Beginner', value: 'Beginner' },
+        { label: 'Intermediate', value: 'Intermediate' },
+        { label: 'Advanced', value: 'Advanced' }
+      ]
+    },
+    {
+      label: 'Topic',
+      value: 'topic',
+      type: 'select' as const,
+      options: Array.from(new Set(sampleActivities.map(a => a.topic))).map(topic => ({
+        label: topic,
+        value: topic
+      }))
+    }
+  ], []);
+
+  const operatorsByType = useMemo(() => ({
+    select: [
+      { label: 'Equals', value: 'equals' },
+      { label: 'Not equals', value: 'not_equals' },
+      { label: 'In', value: 'in' },
+      { label: 'Not in', value: 'not_in' }
+    ]
+  }), []);
+
+  // Filter activities based on current filters
+  const filteredActivities = useMemo(() => {
+    return sampleActivities.filter(activity => {
+      return filters.every(filter => {
+        const activityValue = activity[filter.column as keyof Activity];
+        
+        switch (filter.operator) {
+          case 'equals':
+            return activityValue === filter.value;
+          case 'not_equals':
+            return activityValue !== filter.value;
+          case 'in':
+            return Array.isArray(filter.value) && filter.value.includes(activityValue);
+          case 'not_in':
+            return Array.isArray(filter.value) && !filter.value.includes(activityValue);
+          default:
+            return true;
+        }
+      });
+    });
+  }, [filters]);
 
   const handleDragStart = useCallback((e: React.DragEvent, activity: Activity) => {
     e.dataTransfer.setData('application/json', JSON.stringify(activity));
@@ -981,8 +1047,8 @@ export default function LabBuilderPage() {
   const renderBuildStep = () => (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Activity Bank */}
-      <div className="lg:col-span-2">
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="lg:col-span-1 flex flex-col h-screen">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 flex flex-col h-full">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Activity Bank</h2>
             <Button
@@ -994,8 +1060,18 @@ export default function LabBuilderPage() {
               Generate with AI
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-            {sampleActivities.map(activity => (
+          
+          <div className="mb-4">
+            <FilterControls
+              columns={filterColumns}
+              filters={filters}
+              onFiltersChange={setFilters}
+              operatorsByType={operatorsByType}
+            />
+          </div>
+          
+          <div className="grid grid-cols-1 gap-4 overflow-y-auto flex-1">
+            {filteredActivities.map(activity => (
               <ActivityCard
                 key={activity.id}
                 activity={activity}
@@ -1008,7 +1084,7 @@ export default function LabBuilderPage() {
       </div>
 
       {/* Lab Canvas */}
-      <div className="lg:col-span-1">
+      <div className="lg:col-span-2">
         <div
           className={`
             bg-white rounded-lg border-2 border-dashed p-6 min-h-[400px]
@@ -1028,13 +1104,19 @@ export default function LabBuilderPage() {
                 selectedActivities.length === 0 ? 'text-gray-400' : 'text-primary-main'
               }`} 
             />
-            <h3 className="font-semibold text-gray-900 mb-1">Your Lab</h3>
-            <p className="text-sm text-gray-600">
-              {selectedActivities.length === 0 
-                ? 'Drag activities here to build your lab' 
-                : `${selectedActivities.length} activities selected`
-              }
-            </p>
+            <div className="mb-3">
+              <TextField
+                value={labName}
+                onChange={(e) => setLabName(e.target.value)}
+                placeholder="Enter your lab name..."
+                className="text-center font-semibold text-gray-900 text-lg"
+              />
+            </div>
+            {selectedActivities.length > 0 && (
+              <p className="text-sm text-gray-600">
+                {selectedActivities.length} activities selected
+              </p>
+            )}
           </div>
 
           {selectedActivities.length === 0 ? (
